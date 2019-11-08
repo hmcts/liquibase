@@ -1,6 +1,7 @@
 package liquibase.change.core;
 
 import liquibase.CatalogAndSchema;
+import liquibase.Scope;
 import liquibase.change.*;
 import liquibase.changelog.ChangeSet;
 import liquibase.database.AbstractJdbcDatabase;
@@ -12,16 +13,15 @@ import liquibase.datatype.DataTypeFactory;
 import liquibase.datatype.LiquibaseDataType;
 import liquibase.exception.DatabaseException;
 import liquibase.exception.DateParseException;
+import liquibase.exception.LiquibaseException;
 import liquibase.exception.UnexpectedLiquibaseException;
 import liquibase.exception.Warnings;
 import liquibase.executor.ExecutorService;
 import liquibase.executor.LoggingExecutor;
 import liquibase.io.EmptyLineAndCommentSkippingInputStream;
-import liquibase.logging.LogService;
 import liquibase.logging.LogType;
 import liquibase.logging.Logger;
 import liquibase.resource.ResourceAccessor;
-import liquibase.resource.UtfBomAwareReader;
 import liquibase.snapshot.InvalidExampleException;
 import liquibase.snapshot.SnapshotGeneratorFactory;
 import liquibase.statement.BatchDmlExecutablePreparedStatement;
@@ -35,6 +35,7 @@ import liquibase.structure.core.Column;
 import liquibase.structure.core.DataType;
 import liquibase.structure.core.Table;
 import liquibase.util.BooleanParser;
+import liquibase.util.ObjectUtil;
 import liquibase.util.StreamUtil;
 import liquibase.util.StringUtil;
 import liquibase.util.csv.CSVReader;
@@ -76,7 +77,7 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns<
      * CSV Lines starting with that sign(s) will be treated as comments by default
      */
     public static final String DEFAULT_COMMENT_PATTERN = "#";
-    private static final Logger LOG = LogService.getLog(LoadDataChange.class);
+    private static final Logger LOG = Scope.getCurrentScope().getLog(LoadDataChange.class);
     private static ResourceBundle coreBundle = getBundle("liquibase/i18n/liquibase-core");
     private String catalogName;
     private String schemaName;
@@ -531,7 +532,7 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns<
                     return statementSet.getStatementsArray();
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException | LiquibaseException e) {
             throw new RuntimeException(e);
         } catch (UnexpectedLiquibaseException ule) {
             if ((getChangeSet() != null) && (getChangeSet().getFailOnError() != null) && !getChangeSet()
@@ -703,21 +704,17 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns<
         return true;
     }
 
-    public CSVReader getCSVReader() throws IOException {
+    public CSVReader getCSVReader() throws IOException, LiquibaseException {
         ResourceAccessor resourceAccessor = getResourceAccessor();
         if (resourceAccessor == null) {
             throw new UnexpectedLiquibaseException("No file resourceAccessor specified for " + getFile());
         }
-        InputStream stream = StreamUtil.openStream(file, isRelativeToChangelogFile(), getChangeSet(), resourceAccessor);
+        String relativeTo = getRelativeTo();
+        InputStream stream = resourceAccessor.openStream(relativeTo, file);
         if (stream == null) {
             return null;
         }
-        Reader streamReader;
-        if (getEncoding() == null) {
-            streamReader = new UtfBomAwareReader(stream);
-        } else {
-            streamReader = new UtfBomAwareReader(stream, getEncoding());
-        }
+        Reader streamReader = StreamUtil.readStreamWithReader(stream, getEncoding());
 
         char quotchar;
         if (StringUtil.trimToEmpty(this.quotchar).isEmpty()) {
@@ -732,6 +729,14 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns<
         }
 
         return new CSVReader(streamReader, separator.charAt(0), quotchar);
+    }
+
+    protected String getRelativeTo() {
+        String relativeTo = null;
+        if (ObjectUtil.defaultIfNull(isRelativeToChangelogFile(), false)) {
+            relativeTo = getChangeSet().getFilePath();
+        }
+        return relativeTo;
     }
 
     protected ExecutablePreparedStatementBase createPreparedStatement(
@@ -779,7 +784,7 @@ public class LoadDataChange extends AbstractChange implements ChangeWithColumns<
     public CheckSum generateCheckSum() {
         InputStream stream = null;
         try {
-            stream = StreamUtil.openStream(file, isRelativeToChangelogFile(), getChangeSet(), getResourceAccessor());
+            stream = getResourceAccessor().openStream(getRelativeTo(), file);
             if (stream == null) {
                 throw new UnexpectedLiquibaseException(getFile() + " could not be found");
             }

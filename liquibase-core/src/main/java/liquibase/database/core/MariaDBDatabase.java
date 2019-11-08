@@ -1,8 +1,10 @@
 package liquibase.database.core;
 
+import java.util.Arrays;
+
+import liquibase.Scope;
 import liquibase.database.DatabaseConnection;
 import liquibase.exception.DatabaseException;
-import liquibase.logging.LogService;
 import liquibase.logging.LogType;
 import liquibase.util.StringUtil;
 
@@ -12,6 +14,16 @@ import liquibase.util.StringUtil;
  */
 public class MariaDBDatabase extends MySQLDatabase {
     private static final String PRODUCT_NAME = "MariaDB";
+
+    public MariaDBDatabase() {
+        addReservedWords(Arrays.asList("PERIOD"));
+        super.sequenceNextValueFunction = "NEXT VALUE FOR %s";
+        // According to https://mariadb.com/kb/en/library/data-types/, retrieved on 2019-02-12
+        super.unmodifiableDataTypes.addAll(Arrays.asList(
+           "boolean", "tinyint", "smallint", "mediumint", "int", "integer", "bigint", "dec", "numeric",
+           "fixed", "float", "bit"
+        ));
+    }
 
     @Override
     public String getShortName() {
@@ -43,7 +55,7 @@ public class MariaDBDatabase extends MySQLDatabase {
             minor = getDatabaseMinorVersion();
             patch = getDatabasePatchVersion();
         } catch (DatabaseException x) {
-            LogService.getLog(getClass()).warning(
+            Scope.getCurrentScope().getLog(getClass()).warning(
                     LogType.LOG, "Unable to determine exact database server version"
                             + " - specified TIMESTAMP precision"
                             + " will not be set: ", x);
@@ -68,7 +80,7 @@ public class MariaDBDatabase extends MySQLDatabase {
             return true; // Identified as MariaDB product
         } else {
             return (("MYSQL".equalsIgnoreCase(conn.getDatabaseProductName())) && conn.getDatabaseProductVersion()
-            .toLowerCase().contains("mariadb"));
+                    .toLowerCase().contains("mariadb"));
         }
     }
 
@@ -79,5 +91,15 @@ public class MariaDBDatabase extends MySQLDatabase {
         // have supported microseconds.
         // https://mariadb.com/kb/en/library/microseconds-in-mariadb/
         return "5.3.0";
+    }
+
+    @Override
+    public boolean supportsSequences() {
+        try {
+            return getDatabaseMajorVersion() >= 10 && getDatabaseMinorVersion() >= 3;
+        } catch (DatabaseException e) {
+            Scope.getCurrentScope().getLog(getClass()).fine(LogType.LOG, "Cannot retrieve database version", e);
+            return false;
+        }
     }
 }

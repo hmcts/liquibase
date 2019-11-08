@@ -22,6 +22,7 @@ public class GlobalConfiguration extends AbstractConfigurationContainer {
     public static final String ALWAYS_OVERRIDE_STORED_LOGIC_SCHEMA = "alwaysOverrideStoredLogicSchema";
     public static final String GENERATED_CHANGESET_IDS_INCLUDE_DESCRIPTION = "generatedChangeSetIdsContainsDescription";
     public static final String USE_DB_LOCK = "useDbLock";
+    public static final String INCLUDE_CATALOG_IN_SPECIFICATION = "includeCatalogInSpecification";
 
     public GlobalConfiguration() {
         super("liquibase");
@@ -96,6 +97,11 @@ public class GlobalConfiguration extends AbstractConfigurationContainer {
             .setDescription(
                 "Should Liquibase use db locks, like Postgres transaction-level advisory locks, when applying the changeSets")
             .setDefaultValue(false);
+
+      getContainer().addProperty(INCLUDE_CATALOG_IN_SPECIFICATION, Boolean.class)
+                .setDescription("Should Liquibase include the catalog name when determining equality?")
+                .setDefaultValue(false);
+
     }
 
     /**

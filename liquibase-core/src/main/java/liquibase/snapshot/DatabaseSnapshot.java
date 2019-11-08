@@ -1,6 +1,7 @@
 package liquibase.snapshot;
 
 import liquibase.CatalogAndSchema;
+import liquibase.Scope;
 import liquibase.configuration.GlobalConfiguration;
 import liquibase.configuration.LiquibaseConfiguration;
 import liquibase.database.Database;
@@ -10,7 +11,6 @@ import liquibase.diff.compare.CompareControl;
 import liquibase.diff.compare.DatabaseObjectComparatorFactory;
 import liquibase.exception.DatabaseException;
 import liquibase.exception.UnexpectedLiquibaseException;
-import liquibase.logging.LogService;
 import liquibase.logging.LogType;
 import liquibase.logging.Logger;
 import liquibase.parser.core.ParsedNode;
@@ -30,7 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public abstract class DatabaseSnapshot implements LiquibaseSerializable {
 
-    private static final Logger LOGGER = LogService.getLog(DatabaseSnapshot.class);
+    private static final Logger LOGGER = Scope.getCurrentScope().getLog(DatabaseSnapshot.class);
     public static final String ALL_CATALOGS_STRING_SCRATCH_KEY = "DatabaseSnapshot.allCatalogsString";
 
     private final DatabaseObject[] originalExamples;
@@ -87,7 +87,11 @@ public abstract class DatabaseSnapshot implements LiquibaseSerializable {
                 for (Catalog catalog : catalogs) {
                     quotedCatalogs.add("'" + catalog.getName() + "'");
                 }
-                this.setScratchData(ALL_CATALOGS_STRING_SCRATCH_KEY, StringUtil.join(quotedCatalogs, ", ").toUpperCase());
+                if (CatalogAndSchema.CatalogAndSchemaCase.ORIGINAL_CASE.equals(database.getSchemaAndCatalogCase())) {
+                    this.setScratchData(ALL_CATALOGS_STRING_SCRATCH_KEY, StringUtil.join(quotedCatalogs, ", "));
+                } else {
+                    this.setScratchData(ALL_CATALOGS_STRING_SCRATCH_KEY, StringUtil.join(quotedCatalogs, ", ").toUpperCase());
+                }
             }
 
             if (getDatabase().supportsCatalogs()) {
@@ -159,6 +163,31 @@ public abstract class DatabaseSnapshot implements LiquibaseSerializable {
         } catch (Exception e) {
             throw new UnexpectedLiquibaseException(e);
         }
+    }
+
+    /**
+     *
+     *  Method which merges two object snapshot models into one
+     *
+     *  @param  snapshotToMerge            Another object snapshot model
+     *  @return DatabaseSnapshot           Merged object model
+     *
+     */
+    public DatabaseSnapshot merge(DatabaseSnapshot snapshotToMerge) {
+        DatabaseSnapshot returnSnapshot = this;
+        Map<Class<? extends DatabaseObject>, Set<? extends DatabaseObject>> allFoundMap = snapshotToMerge.allFound.toMap();
+        Map<Class<? extends DatabaseObject>, Set<? extends DatabaseObject>> referencedObjectsMap = snapshotToMerge.referencedObjects.toMap();
+        for (Set<? extends DatabaseObject> setOfDatabaseObject : allFoundMap.values()) {
+            for (DatabaseObject dbObject : setOfDatabaseObject) {
+                returnSnapshot.allFound.add(dbObject);
+            }
+        }
+        for (Set<? extends DatabaseObject> setOfDatabaseObject : referencedObjectsMap.values()) {
+            for (DatabaseObject dbObject : setOfDatabaseObject) {
+                returnSnapshot.referencedObjects.add(dbObject);
+            }
+        }
+        return returnSnapshot;
     }
 
     public SnapshotControl getSnapshotControl() {
@@ -264,7 +293,7 @@ public abstract class DatabaseSnapshot implements LiquibaseSerializable {
         }
 
         if (!snapshotControl.shouldInclude(example)) {
-            LOGGER.debug(LogType.LOG, "Excluding " + example);
+            LOGGER.fine(LogType.LOG, "Excluding " + example);
             return example;
         }
 
@@ -295,11 +324,11 @@ public abstract class DatabaseSnapshot implements LiquibaseSerializable {
 
             if (example instanceof Schema) {
                 if (snapshotControl.isWarnIfObjectNotFound())
-                    LogService.getLog(getClass()).warning(LogType.LOG, "Did not find schema '" + example + "' to snapshot");
+                    Scope.getCurrentScope().getLog(getClass()).warning(LogType.LOG, "Did not find schema '" + example + "' to snapshot");
             }
             if (example instanceof Catalog) {
                 if (snapshotControl.isWarnIfObjectNotFound())
-                    LogService.getLog(getClass()).warning(LogType.LOG, "Did not find catalog '" + example + "' to snapshot");
+                    Scope.getCurrentScope().getLog(getClass()).warning(LogType.LOG, "Did not find catalog '" + example + "' to snapshot");
             }
 
         } else {
@@ -490,8 +519,15 @@ public abstract class DatabaseSnapshot implements LiquibaseSerializable {
                 catalogName = obj.getName();
             }
             if (catalogName != null) {
-                catalogNames.add(catalogName.toLowerCase());
+                if (CatalogAndSchema.CatalogAndSchemaCase.ORIGINAL_CASE.equals(database.getSchemaAndCatalogCase())) {
+                    catalogNames.add(catalogName);
+                } else {
+                    catalogNames.add(catalogName.toLowerCase());
+                }
             }
+        }
+        if (CatalogAndSchema.CatalogAndSchemaCase.ORIGINAL_CASE.equals(database.getSchemaAndCatalogCase())) {
+            return !catalogNames.contains(fieldCatalog);
         }
 
         return !catalogNames.contains(fieldCatalog.toLowerCase());

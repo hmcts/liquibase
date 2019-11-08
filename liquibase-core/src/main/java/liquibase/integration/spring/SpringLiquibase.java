@@ -3,6 +3,7 @@ package liquibase.integration.spring;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
+import liquibase.Scope;
 import liquibase.configuration.ConfigurationProperty;
 import liquibase.configuration.GlobalConfiguration;
 import liquibase.configuration.LiquibaseConfiguration;
@@ -67,7 +68,7 @@ import java.util.jar.Manifest;
  */
 public class SpringLiquibase implements InitializingBean, BeanNameAware, ResourceLoaderAware {
 
-    protected final Logger log = LogService.getLog(SpringLiquibase.class);
+    protected final Logger log = Scope.getCurrentScope().getLog(SpringLiquibase.class);
     protected String beanName;
 
 	protected ResourceLoader resourceLoader;
@@ -84,6 +85,7 @@ public class SpringLiquibase implements InitializingBean, BeanNameAware, Resourc
 	protected String databaseChangeLogLockTable;
 	protected String liquibaseTablespace;
 	protected boolean dropFirst;
+	protected boolean clearCheckSums;
 	protected boolean shouldRun = true;
 	protected File rollbackFile;
 
@@ -134,6 +136,14 @@ public class SpringLiquibase implements InitializingBean, BeanNameAware, Resourc
 
 	public void setDropFirst(boolean dropFirst) {
 		this.dropFirst = dropFirst;
+	}
+
+	public boolean isClearCheckSums() {
+		return clearCheckSums;
+	}
+
+	public void setClearCheckSums(boolean clearCheckSums) {
+		this.clearCheckSums = clearCheckSums;
 	}
 
 	public void setShouldRun(boolean shouldRun) {
@@ -286,12 +296,12 @@ public class SpringLiquibase implements InitializingBean, BeanNameAware, Resourc
             .getProperty(GlobalConfiguration.class, GlobalConfiguration.SHOULD_RUN);
 
 		if (!shouldRunProperty.getValue(Boolean.class)) {
-            LogService.getLog(getClass()).info(LogType.LOG, "Liquibase did not run because " + LiquibaseConfiguration
+            Scope.getCurrentScope().getLog(getClass()).info(LogType.LOG, "Liquibase did not run because " + LiquibaseConfiguration
                 .getInstance().describeValueLookupLogic(shouldRunProperty) + " was set to false");
             return;
 		}
 		if (!shouldRun) {
-            LogService.getLog(getClass()).info(LogType.LOG, "Liquibase did not run because 'shouldRun' " + "property was set " +
+            Scope.getCurrentScope().getLog(getClass()).info(LogType.LOG, "Liquibase did not run because 'shouldRun' " + "property was set " +
                 "to false on " + getBeanName() + " Liquibase Spring bean.");
             return;
 		}
@@ -340,6 +350,10 @@ public class SpringLiquibase implements InitializingBean, BeanNameAware, Resourc
     }
 
     protected void performUpdate(Liquibase liquibase) throws LiquibaseException {
+		if (isClearCheckSums()) {
+			liquibase.clearCheckSums();
+		}
+
 		if (isTestRollbackOnUpdate()) {
 			if (tag != null) {
 				liquibase.updateTestingRollback(tag, new Contexts(getContexts()), new LabelExpression(getLabels()));
@@ -356,7 +370,7 @@ public class SpringLiquibase implements InitializingBean, BeanNameAware, Resourc
     }
 
 	protected Liquibase createLiquibase(Connection c) throws LiquibaseException {
-		SpringResourceOpener resourceAccessor = createResourceOpener();
+		SpringResourceAccessor resourceAccessor = createResourceOpener();
 		Liquibase liquibase = new Liquibase(getChangeLog(), resourceAccessor, createDatabase(c, resourceAccessor));
         liquibase.setIgnoreClasspathPrefix(isIgnoreClasspathPrefix());
 		if (parameters != null) {
@@ -426,8 +440,8 @@ public class SpringLiquibase implements InitializingBean, BeanNameAware, Resourc
 	/**
 	 * Create a new resourceOpener.
 	 */
-	protected SpringResourceOpener createResourceOpener() {
-		return new SpringResourceOpener(getChangeLog());
+	protected SpringResourceAccessor createResourceOpener() {
+		return new SpringResourceAccessor();
 	}
 
 	/**
@@ -473,193 +487,8 @@ public class SpringLiquibase implements InitializingBean, BeanNameAware, Resourc
         return getClass().getName() + "(" + this.getResourceLoader().toString() + ")";
     }
 
-    public class SpringResourceOpener extends ClassLoaderResourceAccessor {
-
-        private String parentFile;
-
-        public SpringResourceOpener(String parentFile) {
-            this.parentFile = parentFile;
-        }
-
-        @Override
-        protected void init() {
-            super.init();
-            try {
-                Resource[] resources = getResources("");
-                if ((resources.length != 0) && ((resources.length != 1) || resources[0].exists())) {
-                    for (Resource res : resources) {
-                        addRootPath(res.getURL());
-                    }
-                    return;
-                }
-                //sometimes not able to look up by empty string, try all the liquibase packages
-                Set<String> liquibasePackages = new HashSet<>();
-                for (Resource manifest : getResources("META-INF/MANIFEST.MF")) {
-                    liquibasePackages.addAll(getPackagesFromManifest(manifest));
-                }
-
-                if (liquibasePackages.isEmpty()) {
-                    LogService.getLog(getClass()).warning(LogType.LOG,
-                        "No Liquibase-Packages entry found in MANIFEST.MF. " +
-                        "Using fallback of entire 'liquibase' package");
-                    liquibasePackages.add("liquibase");
-                }
-
-                for (String foundPackage : liquibasePackages) {
-                    for (Resource res : getResources(foundPackage)) {
-                        if (res.exists()) {
-                            addRootPath(res.getURL());
-                        } else {
-                            LogService.getLog(getClass()).warning(LogType.LOG,
-                                "Resource does not exist: " +
-                                res.getDescription());
-                        }
-                    }
-                }
-
-            } catch (IOException e) {
-                LogService.getLog(getClass()).warning(LogType.LOG, "Error initializing SpringLiquibase", e);
-            }
-        }
-
-        @Override
-        public Set<String> list(String relativeTo, String path, boolean includeFiles, boolean includeDirectories,
-                                boolean recursive) throws IOException {
-            if (path == null) {
-                return null;
-            }
-
-            //
-            // Possible Resources Types
-            //
-
-            // Standalone Jar
-            // Root Path: jar:file:/Projects/my-project/second-module/target/second-module-1.0.0-SNAPSHOT-exec.jar!/BOOT-INF/lib/first-module-1.0.0-SNAPSHOT.jar!/
-            // +Resource: jar:file:/Projects/my-project/second-module/target/second-module-1.0.0-SNAPSHOT-exec.jar!/BOOT-INF/lib/first-module-1.0.0-SNAPSHOT.jar!/db/changelog/0-initial-schema.xml
-
-            // Standalone War
-            // Root Path: jar:file:/Projects/my-project/second-module/target/second-module-1.0.0-SNAPSHOT-exec.war!/WEB-INF/lib/first-module-1.0.0-SNAPSHOT.jar!/
-            // +Resource: jar:file:/Projects/my-project/second-module/target/second-module-1.0.0-SNAPSHOT-exec.war!/WEB-INF/lib/first-module-1.0.0-SNAPSHOT.jar!/-db/changelog/0-initial-schema.xml
-
-            // Openned Jar Dependency
-            // Root Path: file:/Projects/my-project/first-module/target/classes/
-            // +Resource: file:/Projects/my-project/first-module/target/classes/db/changelog/0-initial-schema.xml
-
-            // War Wild-Fly Exploded
-            // Root Path: vfs:/Projects/my-project/second-module/target/second-module-1.0.0-SNAPSHOT/WEB-INF/lib/first-module-1.0.0-SNAPSHOT.jar/
-            // +Resource: vfs:/Projects/my-project/second-module/target/second-module-1.0.0-SNAPSHOT/WEB-INF/lib/first-module-1.0.0-SNAPSHOT.jar/db/changelog/0-initial-schema.xml
-
-            // War Wild-Fly Artifact
-            // Root Path: vfs:/content/second-module-1.0.0-SNAPSHOT.war/WEB-INF/lib/first-module-1.0.0-SNAPSHOT.jar/
-            // +Resource: vfs:/content/second-module-1.0.0-SNAPSHOT.war/WEB-INF/lib/first-module-1.0.0-SNAPSHOT.jar/db/changelog/0-initial-schema.xml
-
-            Set<String> returnSet = new HashSet<>();
-            path = path + '*'; // All files inside!
-            String tempFile = FilenameUtils.concat(FilenameUtils.getFullPath(relativeTo), path);
-
-            Resource[] resources = getResources(adjustClasspath(tempFile));
-            for (Resource resource : resources) {
-                String resourceStr = resource.getURL().toExternalForm();
-                String resourcePath = convertToPath(resourceStr);
-                if (resourceStr.endsWith(resourcePath) && !resourceStr.equals(resourcePath)) {
-                    returnSet.add(resourcePath);
-                } else {
-                    // Closed Jar Dependency
-                    // Root Path:     file:/.m2/repository/org/liquibase/test/first-module/1.0.0-SNAPSHOT/first-module-1.0.0-SNAPSHOT.jar/
-                    // +Resource: jar:file:/.m2/repository/org/liquibase/test/first-module/1.0.0-SNAPSHOT/first-module-1.0.0-SNAPSHOT.jar!/db/changelog/0-initial-schema.xml
-
-                    String newResourceStr = resource.getURL().getFile(); // Remove "jar:" from begining.
-                    newResourceStr = newResourceStr.replaceAll("!", "");
-                    String newResourcePath = convertToPath(newResourceStr);
-                    if (newResourceStr.endsWith(newResourcePath) && !newResourceStr.equals(newResourcePath)) {
-                        returnSet.add(newResourcePath);
-                    } else {
-                        LogService.getLog(getClass()).warning(
-                            LogType.LOG, "Not a valid resource entry: " + resourceStr);
-                    }
-                }
-            }
-
-            return returnSet;
-        }
-
-        @Override
-        public Set<InputStream> getResourcesAsStream(String path) throws IOException {
-            if (path == null) {
-                return null;
-            }
-            Resource[] resources = getResources(adjustClasspath(path));
-
-            if ((resources == null) || (resources.length == 0)) {
-                return null;
-            }
-
-            Set<InputStream> returnSet = new HashSet<>();
-            for (Resource resource : resources) {
-                LogService.getLog(getClass()).debug(LogType.LOG, "Opening "
-                    + resource.getURL().toExternalForm() + " as " + path);
-                URLConnection connection = resource.getURL().openConnection();
-                connection.setUseCaches(false);
-                returnSet.add(connection.getInputStream());
-            }
-
-            return returnSet;
-        }
-
-        public Resource getResource(String file) {
-            return getResourceLoader().getResource(adjustClasspath(file));
-        }
-
-        private String adjustClasspath(String file) {
-            if (file == null) {
-                return null;
-            }
-            return (isPrefixPresent(parentFile) && !isPrefixPresent(file)) ? (ResourceLoader.CLASSPATH_URL_PREFIX +
-                file) : file;
-        }
+    public class SpringResourceAccessor extends ClassLoaderResourceAccessor {
 
 
-        private Resource[] getResources(String foundPackage) throws IOException {
-            return ResourcePatternUtils.getResourcePatternResolver(getResourceLoader()).getResources(foundPackage);
-        }
-
-        private Set<String> getPackagesFromManifest(Resource manifest) throws IOException {
-            Set<String> manifestPackages = new HashSet<>();
-            if (!manifest.exists()) {
-                return manifestPackages;
-            }
-            InputStream inputStream = null;
-            try {
-                inputStream = manifest.getInputStream();
-                Manifest manifestObj = new Manifest(inputStream);
-                Attributes attributes = manifestObj.getAttributes("Liquibase-Package");
-                if (attributes == null) {
-                    return manifestPackages;
-                }
-                for (Object attr : attributes.values()) {
-                    String packages = "\\s*,\\s*";
-                    for (String fullPackage : attr.toString().split(packages)) {
-                        manifestPackages.add(fullPackage.split("\\.")[0]);
-                    }
-                }
-            } finally {
-                if (inputStream != null) {
-                    inputStream.close();
-                }
-            }
-            return manifestPackages;
-        }
-
-        public boolean isPrefixPresent(String file) {
-            if (file == null) {
-                return false;
-            }
-            return file.startsWith("classpath") || file.startsWith("file:") || file.startsWith("url:");
-        }
-
-        @Override
-        public ClassLoader toClassLoader() {
-            return getResourceLoader().getClassLoader();
-        }
     }
 }
