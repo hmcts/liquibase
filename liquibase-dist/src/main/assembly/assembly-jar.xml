@@ -16,7 +16,7 @@
     <files>
         <file>
             <source>${project.basedir}/target/generated-resources/xml/xslt/.flattened-pom.xml</source>
-            <destName>META-INF/maven/org.liquibase/liquibase/pom.xml</destName>
+            <destName>META-INF/maven/uk.gov.hmcts.reform/liquibase/pom.xml</destName>
         </file>
     </files>
 
