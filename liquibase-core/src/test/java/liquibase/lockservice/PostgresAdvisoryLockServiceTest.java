@@ -145,10 +145,8 @@ public class PostgresAdvisoryLockServiceTest {
 
     @Test
     public void hasChangeLogLockTrue() throws DatabaseException, LockException {
-        //doReturn( executor ).when( lockService ).getExecutor();
-        //doReturn(true).when(executor).queryForObject(TRY_ACQUIRE_LOCK_SQL, Boolean.class);
-        when(lockService.getExecutor()).thenReturn(executor);
-        when(executor.queryForObject(TRY_ACQUIRE_LOCK_SQL, Boolean.class)).thenReturn(true);
+        doReturn( executor ).when( lockService ).getExecutor();
+        doReturn(true).when(executor).queryForObject(TRY_ACQUIRE_LOCK_SQL, Boolean.class);
 
         lockService.acquireLock();
 
@@ -158,7 +156,7 @@ public class PostgresAdvisoryLockServiceTest {
     @Test
     public void hasChangeLogLockFalse() throws DatabaseException, LockException {
         doReturn(executor).when(lockService).getExecutor();
-        //doReturn(false).when(executor).queryForObject(TRY_ACQUIRE_LOCK_SQL, Boolean.class);
+        doReturn(false).when(executor).queryForObject(TRY_ACQUIRE_LOCK_SQL, Boolean.class);
         lockService.acquireLock();
 
         assertThat(lockService.hasChangeLogLock(), is(false));
@@ -167,7 +165,7 @@ public class PostgresAdvisoryLockServiceTest {
     @Test
     public void waitForLock() throws DatabaseException, LockException {
         doReturn(executor).when(lockService).getExecutor();
-       // doReturn(true).when(executor).queryForObject(TRY_ACQUIRE_LOCK_SQL, Boolean.class);
+        doReturn(true).when(executor).queryForObject(TRY_ACQUIRE_LOCK_SQL, Boolean.class);
 
         lockService.waitForLock();
 
