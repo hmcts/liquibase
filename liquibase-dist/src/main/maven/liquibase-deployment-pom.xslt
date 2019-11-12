@@ -13,7 +13,7 @@
     <xsl:template match="maven:profiles"/>
 
     <!-- remove all org.liquibase sub-module dependencies -->
-    <xsl:template match="maven:dependencies/maven:dependency[maven:groupId = 'uk.gov.hmcts.reform']"/>
+    <xsl:template match="maven:dependencies/maven:dependency[maven:groupId = 'org.liquibase']"/>
 
     <!-- remove all jaxb dependencies -->
     <xsl:template match="maven:dependencies/maven:dependency[maven:groupId = 'com.sun.xml.bind']"/>

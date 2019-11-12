@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
 	<parent>
-		<groupId>uk.gov.hmcts.reform</groupId>
+		<groupId>org.liquibase</groupId>
 		<artifactId>liquibase-base-module</artifactId>
 		<version>${liquibase.version}</version>
 		<relativePath>../base-module.pom.xml</relativePath>
@@ -57,7 +57,7 @@
 				</executions>
                 <configuration>
                     <mojoDependencies>
-                        <param>uk.gov.hmcts.reform:liquibase-maven-plugin</param>
+                        <param>org.liquibase:liquibase-maven-plugin</param>
                     </mojoDependencies>
                 </configuration>
 			</plugin>

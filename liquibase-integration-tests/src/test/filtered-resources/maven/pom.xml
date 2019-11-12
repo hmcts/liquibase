@@ -1,7 +1,7 @@
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
 				 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-    <groupId>uk.gov.hmcts.reform</groupId>
+    <groupId>org.liquibase</groupId>
     <artifactId>liquibase-maven-integration-tests</artifactId>
 	<packaging>jar</packaging>
     <version>1.0-SNAPSHOT</version>
@@ -9,7 +9,7 @@
     <url>http://www.liquibase.org</url>
 	<dependencies>
 		<dependency>
-            <groupId>uk.gov.hmcts.reform</groupId>
+            <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
 			<version>${project.version}</version>
 		</dependency>
@@ -18,7 +18,7 @@
 	<build>
 		<plugins>
 			<plugin>
-                <groupId>uk.gov.hmcts.reform</groupId>
+                <groupId>org.liquibase</groupId>
                 <artifactId>liquibase-maven-plugin</artifactId>
 				<version>${project.version}</version>
 				<dependencies>
