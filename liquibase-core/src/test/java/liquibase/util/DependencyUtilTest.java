@@ -1,6 +1,7 @@
 package liquibase.util;
 
 import org.hamcrest.CoreMatchers;
+import org.hamcrest.Matchers;
 import org.junit.*;
 
 import java.util.*;
@@ -96,7 +97,7 @@ public class DependencyUtilTest {
         graph.add("c", "d");
         graph.add("d", "B");
         graph.computeDependencies();
-        Assert.assertThat(dependencyOrder, CoreMatchers.hasItem("a")); // we try to capture something
+        Assert.assertThat(dependencyOrder, Matchers.hasItem("a")); // we try to capture something
     }
 
     @Test(timeout = 3000)
@@ -111,7 +112,7 @@ public class DependencyUtilTest {
         graph.add("k", "B");
         graph.add("d", "m");
         graph.computeDependencies();
-        Assert.assertThat(dependencyOrder, CoreMatchers.hasItem("a"));
+        Assert.assertThat(dependencyOrder, Matchers.hasItem("a"));
     }
 
     @Test(timeout = 3000)
@@ -122,6 +123,7 @@ public class DependencyUtilTest {
         }
         graph.add("a", "b");
         graph.computeDependencies();
-        Assert.assertThat(dependencyOrder, CoreMatchers.hasItems("a", "b"));
+        Assert.assertThat(dependencyOrder, Matchers.hasItem("a"));
+        Assert.assertThat(dependencyOrder, Matchers.hasItem("b"));
     }
 }
