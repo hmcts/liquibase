@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.liquibase</groupId>
+        <groupId>uk.gov.hmcts.reform</groupId>
         <artifactId>liquibase-base</artifactId>
         <version>${liquibase.version}</version>
         <relativePath>base.pom.xml</relativePath>
@@ -17,13 +17,13 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.liquibase</groupId>
+            <groupId>uk.gov.hmcts.reform</groupId>
             <artifactId>liquibase-core</artifactId>
             <version>${liquibase.version}</version>
         </dependency>
 
         <dependency>
-            <groupId>org.liquibase</groupId>
+            <groupId>uk.gov.hmcts.reform</groupId>
             <artifactId>liquibase-core</artifactId>
             <version>${liquibase.version}</version>
             <type>test-jar</type>

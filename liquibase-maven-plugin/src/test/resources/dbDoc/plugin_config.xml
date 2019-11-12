@@ -7,7 +7,7 @@
   <build>
     <plugins>
       <plugin>
-          <groupId>org.liquibase</groupId>
+          <groupId>uk.gov.hmcts.reform</groupId>
           <artifactId>liquibase-plugin</artifactId>
         <configuration>
           <verbose>true</verbose>
